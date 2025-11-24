@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css">
+
+  <title>Peta Kabupaten Sleman</title>
+
+  <style>
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .legend-box {
+      background: white;
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #aaa;
+      font-size: 13px;
+      line-height: 16px;
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.25);
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .legend-title {
+      font-weight: bold;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .legend-color {
+      width: 14px;
+      height: 14px;
+      margin-right: 6px;
+      border: 1px solid #333;
+    }
+
+    .leaflet-bottom.leaflet-left {
+      margin-left: 12px;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+
+  <script>
+
+    var map = L.map("map").setView([-7.732521, 110.402376], 11);
+
+    var osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19
+    }).addTo(map);
+
+
+    var urlWMS = "http://localhost:8080/geoserver/wms";
+    var urlWFS = "http://localhost:8080/geoserver/pgwebmi/ows";
+
+
+    var wmsSleman_Admin_Kec = L.tileLayer.wms(urlWMS, {
+      layers: "pgwebmi:Sleman_Admin_Kec",
+      format: "image/png",
+        transparent: true
+    });
+
+    var wmsJALAN_LN_25K = L.tileLayer.wms(urlWMS, {
+      layers: "pgwebmi:JALAN_LN_25K",
+      format: "image/png",
+      transparent: true
+        
+    });
+
+    var wmscoba = L.tileLayer.wms(urlWMS, {
+      layers: "pgwebmi:coba",
+      format: "image/png",
+        transparent: true
+    }).addTo(map);
+
+
+    var pendudukLayer = L.layerGroup();
+
+    function loadPenduduk() {
+      var wfsUrl = urlWFS + "?service=WFS&version=2.0.0&request=GetFeature&typeNames=pgwebmi:coba&outputFormat=application/json";
+      console.log("Fetching WFS data from:", wfsUrl);
+      
+      fetch(wfsUrl)
+        .then(response => {
+          console.log("Response status:", response.status);
+          if (!response.ok) throw new Error("WFS request failed: " + response.status);
+          return response.json();
+        })
+        .then(data => {
+          console.log("Data received:", data);
+          
+          if (data.features && data.features.length > 0) {
+            var titik = L.geoJSON(data, {
+              pointToLayer: function (feature, latlng) {
+                return L.circleMarker(latlng, {
+                  radius: 6,
+                  fillColor: "#ff0000",
+                  color: "#000",
+                  weight: 1,
+                  fillOpacity: 0.8
+                });
+              },
+              onEachFeature: function (feature, layer) {
+                layer.bindPopup(
+                  "<b>Point Penduduk</b><br>" +
+                  (feature.properties.nama || "Tidak ada nama")
+                );
+              }
+            });
+
+            pendudukLayer.addLayer(titik);
+            pendudukLayer.addTo(map);
+            console.log("Point layer added to map successfully");
+          } else {
+            console.warn("No features found in WFS response");
+          }
+        })
+        .catch(error => {
+          console.error("Error loading penduduk data:", error);
+        });
+    }
+
+    loadPenduduk();
+
+
+
+    var baseMaps = {
+      "OpenStreetMap": osm
+    };
+
+    var overlayMaps = {
+      "Batas Administrasi Desa": wmsSleman_Admin_Kec,
+      "Jalan": wmsJALAN_LN_25K,
+      "Penduduk (Titik)": wmscoba,
+    };
+
+    L.control.layers(baseMaps, overlayMaps).addTo(map);
+
+
+
+    var legend = L.control({ position: "bottomleft" });
+
+    legend.onAdd = function () {
+      var div = L.DomUtil.create("div", "legend-box");
+      div.innerHTML = "<div class='legend-title'>Kecamatan</div>";
+
+      var items = [
+        { name: "Berbah", color: "#a52a2a" },
+        { name: "Cangkringan", color: "#ff6666" },
+        { name: "Depok", color: "#0066cc" },
+        { name: "Gamping", color: "#33ccff" },
+        { name: "Godean", color: "#669900" },
+        { name: "Kalasan", color: "#ffcc66" },
+        { name: "Minggir", color: "#99cc33" },
+        { name: "Mlati", color: "#339933" },
+        { name: "Moyudan", color: "#cc0099" },
+        { name: "Ngaglik", color: "#ff5050" },
+        { name: "Ngemplak", color: "#3366ff" },
+        { name: "Pakem", color: "#00cc99" },
+        { name: "Prambanan", color: "#ff9933" },
+        { name: "Seyegan", color: "#9933cc" },
+        { name: "Sleman", color: "#009933" },
+        { name: "Tempel", color: "#996600" },
+        { name: "Turi", color: "#66cc00" }
+      ];
+
+      items.forEach(function (item) {
+        div.innerHTML +=
+          "<div class='legend-item'>" +
+          "<div class='legend-color' style='background:" + item.color + ";'></div>" +
+          item.name +
+          "</div>";
+      });
+
+      return div;
+    };
+
+    legend.addTo(map);
+
+  </script>
+</body>
+
+</html>
